@@ -1,0 +1,88 @@
+"""
+ShiftWise Configuration Module
+
+Ce module charge et valide toutes les variables d'environnement
+nécessaires au fonctionnement de l'application.
+
+Utilise Pydantic Settings pour la validation automatique des types
+et la gestion des valeurs par défaut.
+"""
+
+from typing import List
+from pydantic_settings import BaseSettings
+from pydantic import AnyHttpUrl, validator
+from urllib.parse import quote_plus
+
+
+class Settings(BaseSettings):
+    """
+    Classe de configuration principale de ShiftWise.
+
+    Charge automatiquement les variables depuis le fichier .env
+    et valide leur format.
+    """
+
+    # Application Info
+    APP_NAME: str = "ShiftWise"
+    APP_VERSION: str = "1.0.0"
+    DEBUG: bool = False
+
+    # Database Configuration
+    DATABASE_HOST: str
+    DATABASE_PORT: int = 5432
+    DATABASE_NAME: str
+    DATABASE_USER: str
+    DATABASE_PASSWORD: str
+
+    DATABASE_POOL_SIZE: int = 10
+    DATABASE_MAX_OVERFLOW: int = 20
+
+    @property
+    def DATABASE_URL(self) -> str:
+        """
+        Construit l'URL de connexion PostgreSQL.
+        Format: postgresql://user:password@host:port/database
+        """
+
+        encoded_password = quote_plus(self.DATABASE_PASSWORD)
+        encoded_user = quote_plus(self.DATABASE_USER)
+
+        return (
+            f"postgresql://{encoded_user}:{encoded_password}"
+            f"@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
+        )
+
+    # Security & JWT
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # CORS - Origins autorisées pour les requêtes cross-origin
+    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
+
+    @validator("BACKEND_CORS_ORIGINS", pre=True)
+    def assemble_cors_origins(cls, v: str | List[str]) -> List[str] | str:
+        """
+        Valide et transforme les origines CORS.
+        Accepte une liste ou une chaîne JSON.
+        """
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",")]
+        elif isinstance(v, (list, str)):
+            return v
+        raise ValueError(v)
+
+    # API Configuration
+    API_V1_PREFIX: str = "/api/v1"
+
+    class Config:
+        """Configuration de Pydantic Settings"""
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = True
+
+
+# Instance globale des settings
+# À importer dans les autres modules : from app.core.config import settings
+settings = Settings()
